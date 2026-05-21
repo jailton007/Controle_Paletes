@@ -1,3 +1,5 @@
+import io
+import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 
@@ -39,7 +41,6 @@ st.write("Registre e conte as movimentações do pátio e galpão de forma simpl
 st.header("1. Indicadores Gerais")
 
 
-# Função auxiliar para criar botões de + e -
 def secao_contador(label, key):
     st.subheader(label)
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -66,14 +67,12 @@ secao_contador("Paletes no Pulmão", "pulmao")
 # --- SEÇÃO 2: CONTROLAR BLOCADOS ---
 st.header("2. Paletes por Blocado")
 
-# Adicionar um novo blocado se necessário
 novo_blocado = st.text_input("Adicionar novo Blocado (Ex: Blocado C):")
 if st.button("Adicionar Blocado") and novo_blocado:
     if novo_blocado not in st.session_state["blocados"]:
         st.session_state["blocados"][novo_blocado] = 0
         st.rerun()
 
-# Listar e contar cada blocado
 for blocado in list(st.session_state["blocados"].keys()):
     col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
     with col1:
@@ -95,7 +94,6 @@ st.header("3. Retrabalho por Fast Work (1 a 10)")
 
 cols_fw = st.columns(2)
 for i in range(1, 11):
-    # Divide os 10 fast works em duas colunas na tela para ficar organizado
     col_atual = cols_fw[0] if i <= 5 else cols_fw[1]
     with col_atual:
         st.session_state[f"fast_work_{i}"] = st.number_input(
@@ -107,19 +105,62 @@ st.markdown("---")
 # --- SEÇÃO 4: EXPORTAR DADOS ---
 st.header("4. Fechamento e Relatório")
 
-if st.button("📊 Gerar Relatório / Planilha Excel"):
-    # Organizando os dados gerais e fast works
+
+# Função para construir a tabela visual e salvar em formato PDF
+def gerar_pdf(dataframe):
+    # Cria uma imagem para a tabela
+    fig, ax = plt.subplots(figsize=(7, 9))
+    ax.axis("off")
+    ax.axis("tight")
+
+    # Título do PDF
+    plt.title(
+        "RELATÓRIO OPERACIONAL DE PALETES E LOGÍSTICA",
+        fontsize=14,
+        weight="bold",
+        pad=20,
+    )
+
+    # Cria a tabela estilizada
+    tabela = ax.table(
+        cellText=dataframe.values,
+        colLabels=dataframe.columns,
+        cellLoc="center",
+        loc="center",
+        colColours=["#1f77b4", "#1f77b4"],
+    )
+
+    # Formatação do texto da tabela
+    tabela.auto_set_font_size(False)
+    tabela.set_fontsize(11)
+    tabela.scale(1.2, 1.8)
+
+    # Muda a cor do texto do cabeçalho para branco
+    for (row, col), cell in tabela.get_celld().items():
+        if row == 0:
+            cell.get_text().set_color("white")
+            cell.get_text().set_weight("bold")
+
+    # Salva o PDF na memória do computador
+    buffer = io.BytesIO()
+    plt.savefig(buffer, format="pdf", bbox_inches="tight")
+    buffer.seek(0)
+    plt.close()
+    return buffer
+
+
+if st.button("📊 Gerar Relatório / Tabela"):
     dados = {
-        "Indicador": [
+        "Indicador / Setor": [
             "Retrabalho Geral",
-            "PNC",
+            "PNC (Não Conforme)",
             "Avarias",
             "Carros Amarrados",
             "Carros Desamarrados",
             "Devolvidos",
             "Pulmão",
         ],
-        "Quantidade": [
+        "Quantidade (Unidades)": [
             st.session_state["retrabalho_total"],
             st.session_state["pnc"],
             st.session_state["avarias"],
@@ -130,34 +171,28 @@ if st.button("📊 Gerar Relatório / Planilha Excel"):
         ],
     }
 
-    # Adicionando os blocados na planilha
     for b, qtd in st.session_state["blocados"].items():
-        dados["Indicador"].append(f"Estoque - {b}")
-        dados["Quantidade"].append(qtd)
+        dados["Indicador / Setor"].append(f"Estoque - {b}")
+        dados["Quantidade (Unidades)"].append(qtd)
 
-    # Adicionando os Fast Works na planilha
     for i in range(1, 11):
-        dados["Indicador"].append(f"Fast Work {i} (Retrabalho)")
-        dados["Quantidade"].append(st.session_state[f"fast_work_{i}"])
+        dados["Indicador / Setor"].append(f"Fast Work {i} (Retrabalho)")
+        dados["Quantidade (Unidades)"].append(st.session_state[f"fast_work_{i}"])
 
     df = pd.DataFrame(dados)
 
-
-    # Convertendo para excel para o usuário baixar
-    @st.cache_data
-    def convert_df(df_para_converter):
-        return df_para_converter.to_csv(index=False).encode("utf-8")
-
-    csv = convert_df(df)
-
-    st.success("Relatório gerado com sucesso!")
+    st.success("Relatório preparado com sucesso!")
     st.dataframe(df)
 
+    # Cria o arquivo PDF usando a função nova
+    pdf_data = gerar_pdf(df)
+
+    # Botão de download atualizado para PDF
     st.download_button(
-        label="📥 Baixar Planilha (CSV/Excel)",
-        data=csv,
-        file_name="relatorio_paletes.csv",
-        mime="text/csv",
+        label="📥 Baixar Relatório em PDF",
+        data=pdf_data,
+        file_name="relatorio_paletes.pdf",
+        mime="application/pdf",
     )
 
 # Botão de Reset
