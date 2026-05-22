@@ -22,10 +22,14 @@ def inicializar_estoque():
         if var not in st.session_state:
             st.session_state[var] = 0
 
-    # Inicializar os 10 Fast Works
+    # Inicializar os 10 Fast Works com subcategorias (Retrabalho, Avarias, PNC)
     for i in range(1, 11):
         if f"fast_work_{i}" not in st.session_state:
-            st.session_state[f"fast_work_{i}"] = 0
+            st.session_state[f"fast_work_{i}"] = {
+                "retrabalho": 0,
+                "avarias": 0,
+                "pnc": 0,
+            }
 
     # Inicializar os Blocados (Dinâmico)
     if "blocados" not in st.session_state:
@@ -90,15 +94,39 @@ for blocado in list(st.session_state["blocados"].keys()):
 st.markdown("---")
 
 # --- SEÇÃO 3: FAST WORKS ---
-st.header("3. Retrabalho por Fast Work (1 a 10)")
+st.header("3. Retrabalho e Qualidade por Fast Work (1 a 10)")
 
+# Exibição dos Fast Works em duas colunas para economizar espaço vertical
 cols_fw = st.columns(2)
 for i in range(1, 11):
     col_atual = cols_fw[0] if i <= 5 else cols_fw[1]
     with col_atual:
-        st.session_state[f"fast_work_{i}"] = st.number_input(
-            f"Fast Work {i}", min_value=0, value=st.session_state[f"fast_work_{i}"]
+        st.markdown(f"### 🛠️ Fast Work {i}")
+
+        # Input para Retrabalho
+        st.session_state[f"fast_work_{i}"]["retrabalho"] = st.number_input(
+            f"Qtd Retrabalho - FW {i}",
+            min_value=0,
+            value=st.session_state[f"fast_work_{i}"]["retrabalho"],
+            key=f"fw_{i}_ret",
         )
+
+        # Input para Avarias
+        st.session_state[f"fast_work_{i}"]["avarias"] = st.number_input(
+            f"Qtd Avarias - FW {i}",
+            min_value=0,
+            value=st.session_state[f"fast_work_{i}"]["avarias"],
+            key=f"fw_{i}_ava",
+        )
+
+        # Input para PNC
+        st.session_state[f"fast_work_{i}"]["pnc"] = st.number_input(
+            f"Qtd PNC - FW {i}",
+            min_value=0,
+            value=st.session_state[f"fast_work_{i}"]["pnc"],
+            key=f"fw_{i}_pnc",
+        )
+        st.markdown("---")
 
 st.markdown("---")
 
@@ -108,8 +136,8 @@ st.header("4. Fechamento e Relatório")
 
 # Função para construir a tabela visual e salvar em formato PDF
 def gerar_pdf(dataframe):
-    # Cria uma imagem para a tabela
-    fig, ax = plt.subplots(figsize=(7, 9))
+    # Aumentei o tamanho vertical da figura para comportar as linhas extras do relatório
+    fig, ax = plt.subplots(figsize=(8, 14))
     ax.axis("off")
     ax.axis("tight")
 
@@ -132,8 +160,8 @@ def gerar_pdf(dataframe):
 
     # Formatação do texto da tabela
     tabela.auto_set_font_size(False)
-    tabela.set_fontsize(11)
-    tabela.scale(1.2, 1.8)
+    tabela.set_fontsize(10)
+    tabela.scale(1.2, 1.5)
 
     # Muda a cor do texto do cabeçalho para branco
     for (row, col), cell in tabela.get_celld().items():
@@ -171,18 +199,27 @@ if st.button("📊 Gerar Relatório / Tabela"):
         ],
     }
 
+    # Adiciona os dados dos Blocados
     for b, qtd in st.session_state["blocados"].items():
         dados["Indicador / Setor"].append(f"Estoque - {b}")
         dados["Quantidade (Unidades)"].append(qtd)
 
+    # Adiciona os dados detalhados de cada Fast Work
     for i in range(1, 11):
-        dados["Indicador / Setor"].append(f"Fast Work {i} (Retrabalho)")
-        dados["Quantidade (Unidades)"].append(st.session_state[f"fast_work_{i}"])
+        fw_data = st.session_state[f"fast_work_{i}"]
+        dados["Indicador / Setor"].append(f"Fast Work {i} - Retrabalho")
+        dados["Quantidade (Unidades)"].append(fw_data["retrabalho"])
+
+        dados["Indicador / Setor"].append(f"Fast Work {i} - Avarias")
+        dados["Quantidade (Unidades)"].append(fw_data["avarias"])
+
+        dados["Indicador / Setor"].append(f"Fast Work {i} - PNC")
+        dados["Quantidade (Unidades)"].append(fw_data["pnc"])
 
     df = pd.DataFrame(dados)
 
     st.success("Relatório preparado com sucesso!")
-    st.dataframe(df)
+    st.dataframe(df, height=500)  # Definido um scroll interno para a tabela no Streamlit
 
     # Cria o arquivo PDF usando a função nova
     pdf_data = gerar_pdf(df)
@@ -198,7 +235,7 @@ if st.button("📊 Gerar Relatório / Tabela"):
 # Botão de Reset
 if st.button("⚠️ Zerar Todas as Contagens (Novo Turno)"):
     for key in list(st.session_state.keys()):
-        if key.startswith("fast_work_") or key in [
+        if key in [
             "retrabalho_total",
             "pnc",
             "avarias",
@@ -208,5 +245,10 @@ if st.button("⚠️ Zerar Todas as Contagens (Novo Turno)"):
             "pulmao",
         ]:
             st.session_state[key] = 0
+
+        # Zera a estrutura interna de cada Fast Work
+        elif key.startswith("fast_work_"):
+            st.session_state[key] = {"retrabalho": 0, "avarias": 0, "pnc": 0}
+
     st.session_state["blocados"] = {"Blocado A": 0, "Blocado B": 0}
     st.rerun()
